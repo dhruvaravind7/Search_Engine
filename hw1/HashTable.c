@@ -102,7 +102,7 @@ void HashTable_Free(HashTable *table,
       Verify333(LinkedList_Pop(bucket, (LLPayload_t *)&kv));
       value_free_function(kv->value);
       free(kv);
-    }
+    } 
     // The chain is empty, so we can pass in the
     // null free function to LinkedList_Free.
     LinkedList_Free(bucket, LLNoOpFree);

@@ -26,7 +26,9 @@ LinkedList* LinkedList_Allocate(void) {
   Verify333(ll != NULL);
 
   // STEP 1: initialize the newly allocated record structure.
-
+  ll->num_elements = 0;
+  ll->head = NULL;
+  ll->tail = NULL;
   // Return our newly minted linked list.
   return ll;
 }
@@ -39,7 +41,13 @@ void LinkedList_Free(LinkedList *list,
   // STEP 2: sweep through the list and free all of the nodes' payloads
   // (using the payload_free_function supplied as an argument) and
   // the nodes themselves.
-
+  LinkedListNode* curr = list->head;
+  while (curr != NULL) {
+    payload_free_function(curr->payload);
+    LinkedListNode* next = curr->next;
+    free(curr);
+    curr = next;
+  }
   // free the LinkedList
   free(list);
 }
@@ -68,6 +76,11 @@ void LinkedList_Push(LinkedList *list, LLPayload_t payload) {
     list->num_elements = 1;
   } else {
     // STEP 3: typical case; list has >=1 elements
+    ln->next = list->head;
+    ln->prev = NULL;
+    list->head->prev = ln;
+    list->head = ln;
+    list->num_elements ++;
   }
 }
 
@@ -81,7 +94,20 @@ bool LinkedList_Pop(LinkedList *list, LLPayload_t *payload_ptr) {
   // and (b) the general case of a list with >=2 elements in it.
   // Be sure to call free() to deallocate the memory that was
   // previously allocated by LinkedList_Push().
-
+  if (list->num_elements == 0) {
+    return (false);
+  }
+  LinkedListNode* curr = list->head;
+  *payload_ptr = curr->payload;
+  if (list->num_elements == 1) {
+    list->head = NULL;
+    list->tail = NULL;
+  } else {
+    list->head = curr->next;
+    list->head->prev = NULL;
+  }
+  free(curr);
+  list->num_elements --;
   return true;  // you may need to change this return value
 }
 
@@ -91,6 +117,20 @@ void LinkedList_Append(LinkedList *list, LLPayload_t payload) {
   // STEP 5: implement LinkedList_Append.  It's kind of like
   // LinkedList_Push, but obviously you need to add to the end
   // instead of the beginning.
+  LinkedListNode* ln = (LinkedListNode*) malloc(sizeof(LinkedListNode));
+  ln->next = NULL;
+  ln->payload = payload;
+
+  if (list->num_elements == 0) {
+    ln->prev = NULL;
+    list->head = ln;
+    list->tail = ln;
+  } else {
+    ln->prev = list->tail;
+    list->tail->next = ln;
+    list->tail = ln;
+  }
+  list->num_elements ++;
 }
 
 void LinkedList_Sort(LinkedList *list, bool ascending,
@@ -166,7 +206,10 @@ bool LLIterator_Next(LLIterator *iter) {
   // you succeed, false otherwise
   // Note that if the iterator is already at the last node,
   // you should move the iterator past the end of the list
-
+  iter->node = iter->node->next;
+  if (iter->node == NULL) {
+    return false;
+  }
   return true;  // you may need to change this return value
 }
 
@@ -196,9 +239,28 @@ bool LLIterator_Remove(LLIterator *iter,
   // Be sure to call the payload_free_function to free the payload
   // the iterator is pointing to, and also free any LinkedList
   // data structure element as appropriate.
-
-
-  return true;  // you may need to change this return value
+  LinkedListNode* curr = iter->node;
+  payload_free_function(curr->payload);
+  if (iter->list->num_elements == 1) {
+    iter->list->head = NULL;
+    iter->list->tail = NULL;
+    iter->node = NULL;
+  } else if (curr == iter->list->tail) {
+    iter->node = curr->prev;
+    curr->prev->next = NULL;
+    iter->list->tail = curr->prev;
+  } else if (curr == iter->list->head) {
+    iter->node = curr->next;
+    curr->next->prev = NULL;
+    iter->list->head = curr->next;
+  } else {
+    iter->node = curr->next;
+    curr->prev->next = curr->next;
+    curr->next->prev = curr->prev;
+  }
+  free(curr);
+  iter->list->num_elements --;
+  return (iter->list->num_elements > 0);
 }
 
 
@@ -210,7 +272,20 @@ bool LLSlice(LinkedList *list, LLPayload_t *payload_ptr) {
   Verify333(list != NULL);
 
   // STEP 8: implement LLSlice.
-
+  if (list->num_elements == 0) {
+    return (false);
+  }
+  *payload_ptr = list->tail->payload;
+  LinkedListNode* curr = list->tail;
+  if (list->num_elements == 1) {
+    list->head = NULL;
+    list->tail = NULL;
+  } else {
+    list->tail = list->tail->prev;
+    list->tail->next = NULL;
+  }
+  free(curr);
+  list->num_elements --;
   return true;  // you may need to change this return value
 }
 

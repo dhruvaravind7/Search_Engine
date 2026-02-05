@@ -38,7 +38,7 @@
 // opaque to the customer.
 typedef struct ht HashTable;
 
-// Key and value type definitions:
+// Key and value type definitions: 
 // For generality, a value must be large enough to hold a pointer.
 // If the client's data is no bigger than a pointer, a copy of that
 // data can be stored in the HashTable, by casting it to the HTValue_t
@@ -59,7 +59,7 @@ typedef struct {
 // Lecture 3 slides (Pointers, pointers, pointers...) for more detail on the
 // syntax and usage.
 typedef void(*ValueFreeFnPtr)(HTValue_t value);
-
+ 
 // FNV hash implementation.
 //
 // Customers can use this to hash an arbitrary sequence of bytes into
