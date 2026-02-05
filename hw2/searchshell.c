@@ -54,6 +54,22 @@ int main(int argc, char** argv) {
   // Note that you should make sure the fomatting of your
   // searchshell output exactly matches our solution binaries
   // to get full points on this part.
+  DocTable* dt = NULL;
+  MemIndex* mi = NULL;
+
+  // Crawl the directory and build the index
+  printf("Indexing '%s'\n", argv[1]);
+  if (!CrawlFileTree(argv[1], &dt, &mi)) {
+    fprintf(stderr, "Failed to crawl directory '%s'\n", argv[1]);
+    Usage();
+  }
+
+  // Process queries
+  ProcessQueries(dt, mi);
+
+  // Clean up
+  DocTable_Free(dt);
+  MemIndex_Free(mi);
   return EXIT_SUCCESS;
 }
 
@@ -70,8 +86,112 @@ static void Usage(void) {
 }
 
 static void ProcessQueries(DocTable* dt, MemIndex* mi) {
+  char* query_line = NULL;
+
+  while (1) {
+    printf("enter query:\n");
+
+    // Read the next line from stdin
+    int result = GetNextLine(stdin, &query_line);
+    if (result == -1) {
+      // End of file
+      printf("shutting down...\n");
+      break;
+    }
+
+    // Split the query into words
+    char** words = NULL;
+    int num_words = 0;
+    int words_capacity = 4;
+    words = (char**) malloc(words_capacity * sizeof(char*));
+    Verify333(words != NULL);
+
+    char* saveptr;
+    char* word = strtok_r(query_line, " \t", &saveptr);
+
+    while (word != NULL) {
+      // Convert to lowercase
+      for (int i = 0; word[i] != '\0'; i++) {
+        word[i] = tolower(word[i]);
+      }
+
+      // Expand array if needed
+      if (num_words >= words_capacity) {
+        words_capacity *= 2;
+        words = (char**) realloc(words, words_capacity * sizeof(char*));
+        Verify333(words != NULL);
+      }
+
+      words[num_words++] = word;
+      word = strtok_r(NULL, " \t", &saveptr);
+    }
+
+    // Search the index
+    if (num_words > 0) {
+      LinkedList* results = MemIndex_Search(mi, words, num_words);
+
+      if (results != NULL && LinkedList_NumElements(results) > 0) {
+        // Print results
+        LLIterator* it = LLIterator_Allocate(results);
+        Verify333(it != NULL);
+
+        while (LLIterator_IsValid(it)) {
+          SearchResult* sr;
+          LLIterator_Get(it, (LLPayload_t*)&sr);
+
+          char* doc_name = DocTable_GetDocName(dt, sr->doc_id);
+          printf("  %s (%d)\n", doc_name, sr->rank);
+
+          LLIterator_Next(it);
+        }
+        LLIterator_Free(it);
+
+        LinkedList_Free(results, free);
+      }
+      // If results is NULL or empty, print nothing
+    }
+
+    free(words);
+    free(query_line);
+  }
 }
 
 static int GetNextLine(FILE* f, char** ret_str) {
-  return -1;  // you may need to change this return value
+  size_t buffer_size = 128;
+  char* buffer = (char*) malloc(buffer_size);
+  if (buffer == NULL) {
+    return -1;
+  }
+
+  size_t pos = 0;
+
+  while (1) {
+    int c = fgetc(f);
+
+    if (c == EOF) {
+      if (pos == 0) {
+        free(buffer);
+        return -1;
+      }
+      buffer[pos] = '\0';
+      *ret_str = buffer;
+      return pos;
+    }
+
+    if (c == '\n') {
+      buffer[pos] = '\0';
+      *ret_str = buffer;
+      return pos;
+    }
+
+    buffer[pos++] = c;
+
+    if (pos >= buffer_size - 1) {
+      buffer_size *= 2;
+      buffer = (char*) realloc(buffer, buffer_size);
+      if (buffer == NULL) {
+        return -1;
+      }
+    }
+  }
 }

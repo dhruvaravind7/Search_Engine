@@ -22,7 +22,7 @@
 // CrawlFileTree crawls the filesystem subtree rooted at directory "rootdir".
 // For each file that it encounters, it scans the file to test whether it
 // contains ASCII text data.  If so, it indexes the file.
-//
+// 
 // Arguments:
 // - rootdir: the name of the directory which is the root of the crawl.
 //

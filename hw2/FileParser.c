@@ -73,26 +73,28 @@ char* ReadFileToString(const char* file_name, int* size) {
   // Use the stat system call to fetch a "struct stat" that describes
   // properties of the file. ("man 2 stat"). You can assume we're on a 64-bit
   // system, with a 64-bit off_t field.
-
+  result = stat(file_name, &file_stat);
+  if (result == -1) {
+    return NULL;  // indicate failure
+  }
 
 
   // STEP 2.
   // Make sure this is a "regular file" and not a directory or something else.
   // We suggest using the S_ISREG macro described in "man 7 inode", but you
   // could also check the bitmask as described in "man 2 stat".
-
-
+  Verify333(S_ISREG(file_stat.st_mode));
 
   // STEP 3.
   // Attempt to open the file for reading (see also "man 2 open").
-
-
+  fd = open(file_name, O_RDONLY);
+  Verify333(fd != -1);
 
   // STEP 4.
   // Allocate space for the file, plus 1 extra byte to
   // '\0'-terminate the string.
-
-
+  buf = (char*) malloc(file_stat.st_size + 1);
+  Verify333(buf != NULL);
 
   // STEP 5.
   // Read in the file contents using the read() system call (see also
@@ -104,6 +106,21 @@ char* ReadFileToString(const char* file_name, int* size) {
   // particular what the return values -1 and 0 imply.
   left_to_read = file_stat.st_size;
   while (left_to_read > 0) {
+    num_read = read(fd, buf + (file_stat.st_size - left_to_read),
+                    left_to_read);
+    if (num_read == -1) {  // error occurred
+      if (errno == EINTR || errno == EAGAIN) {  // recoverable error
+        continue;
+      } else {  // non-recoverable error
+        free(buf);
+        close(fd);
+        return NULL;  // indicate failure
+      }
+    } else if (num_read == 0) {  // End of file reached
+      break;
+    } else {
+      left_to_read -= num_read;  // update bytes successfully read
+    }
   }
 
   // Great, we're done!  We hit the end of the file and we read
@@ -205,7 +222,25 @@ static void InsertContent(HashTable* tab, char* content) {
   //     AddWordPosition(tab, wordstart, pos);
 
   while (1) {
-    break;  // you may need to change this logic
+    if (*cur_ptr == '\0') {  // end of string
+      if (cur_ptr != content && isalpha((unsigned char) *(cur_ptr - 1))) {
+        *cur_ptr = '\0';  // end word
+        AddWordPosition(tab, word_start,
+                        (DocPositionOffset_t)(word_start - content));
+      }
+      break;
+    }
+    if (isalpha((unsigned char) *cur_ptr)) {  // alphabetic character
+      *cur_ptr = tolower((unsigned char) *cur_ptr);  // lowercase character
+    } else {
+      if (cur_ptr != content && isalpha((unsigned char) *(cur_ptr - 1))) {
+        *cur_ptr = '\0';  // end word
+        AddWordPosition(tab, word_start,
+                        (DocPositionOffset_t)(word_start - content));
+      }
+      word_start = cur_ptr + 1;  // next word starts after boundary
+    }
+    cur_ptr++;
   }  // end while-loop
 }
 
@@ -237,5 +272,16 @@ static void AddWordPosition(HashTable* tab, char* word,
     // No; this is the first time we've seen this word.  Allocate and prepare
     // a new WordPositions structure, and append the new position to its list
     // using a similar ugly hack as right above.
+    wp = (WordPositions*) malloc(sizeof(WordPositions));
+    Verify333(wp != NULL);
+    wp->word = strdup(word);
+    Verify333(wp->word != NULL);
+    wp->positions = LinkedList_Allocate();
+    Verify333(wp->positions != NULL);
+    LinkedList_Append(wp->positions, (LLPayload_t)(int64_t) pos);
+
+    kv.key = hash_key;
+    kv.value = wp;
+    HashTable_Insert(tab, kv, NULL);
   }
 }

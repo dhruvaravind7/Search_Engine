@@ -102,7 +102,6 @@ void MemIndex_AddPostingList(MemIndex* index, char* word, DocID_t doc_id,
   // STEP 1.
   // Remove this early return.  We added this in here so that your unittests
   // would pass even if you haven't finished your MemIndex implementation.
-  return;
 
 
   // First, we have to see if the passed-in word already exists in
@@ -119,7 +118,20 @@ void MemIndex_AddPostingList(MemIndex* index, char* word, DocID_t doc_id,
     //       mapping.
     //   (3) insert the the new WordPostings into the inverted index (ie, into
     //       the "index" table).
+    wp = (WordPostings*) malloc(sizeof(WordPostings));
+    Verify333(wp != NULL);
 
+    // Use the passed-in word (we take ownership)
+    wp->word = word;
+
+    // Allocate hash table for docID->postings mapping
+    wp->postings = HashTable_Allocate(HASHTABLE_INITIAL_NUM_BUCKETS);
+    Verify333(wp->postings != NULL);
+
+    // Insert the new WordPostings into the index
+    mi_kv.key = key;
+    mi_kv.value = wp;
+    HashTable_Insert(index, mi_kv, &unused);
 
 
   } else {
@@ -149,6 +161,9 @@ void MemIndex_AddPostingList(MemIndex* index, char* word, DocID_t doc_id,
   // The entry's key is this docID and the entry's value
   // is the "postings" (ie, word positions list) we were passed
   // as an argument.
+  postings_kv.key = doc_id;
+  postings_kv.value = postings;
+  HashTable_Insert(wp->postings, postings_kv, &unused);
 }
 
 LinkedList* MemIndex_Search(MemIndex* index, char* query[], int query_len) {
@@ -171,7 +186,39 @@ LinkedList* MemIndex_Search(MemIndex* index, char* query[], int query_len) {
   // each document that matches, allocate and initialize a SearchResult
   // structure (the initial computed rank is the number of times the word
   // appears in that document).  Finally, append the SearchResult onto ret_list.
+  key = FNVHash64((unsigned char*) query[0], strlen(query[0]));
+  if (!HashTable_Find(index, key, &kv)) {
+    // First word not found - no results
+    return NULL;
+  }
+  wp = (WordPostings*) kv.value;
+  // Allocate the result list
+  ret_list = LinkedList_Allocate();
+  Verify333(ret_list != NULL);
 
+  // Iterate through all documents containing this word
+  HTIterator* ht_it = HTIterator_Allocate(wp->postings);
+  Verify333(ht_it != NULL);
+
+  while (HTIterator_IsValid(ht_it)) {
+    HTKeyValue_t doc_kv;
+    HTIterator_Get(ht_it, &doc_kv);
+
+    // Allocate and initialize a SearchResult
+    SearchResult* result = (SearchResult*) malloc(sizeof(SearchResult));
+    Verify333(result != NULL);
+
+    result->doc_id = doc_kv.key;
+    // Rank is the number of positions (occurrences) of this word
+    LinkedList* positions = (LinkedList*) doc_kv.value;
+    result->rank = LinkedList_NumElements(positions);
+
+    // Append to result list
+    LinkedList_Append(ret_list, result);
+
+    HTIterator_Next(ht_it);
+  }
+  HTIterator_Free(ht_it);
 
 
   // Great; we have our search results for the first query
@@ -192,7 +239,14 @@ LinkedList* MemIndex_Search(MemIndex* index, char* query[], int query_len) {
     // Look up the next query word (query[i]) in the inverted index.
     // If there are no matches, it means the overall query
     // should return no documents, so free ret_list and return NULL.
+    key = FNVHash64((unsigned char*) query[i], strlen(query[i]));
+    if (!HashTable_Find(index, key, &kv)) {
+      // No matches for this word - free results and return NULL
+      LinkedList_Free(ret_list, free);
+      return NULL;
+    }
 
+    wp = (WordPostings*) kv.value;
 
 
     // STEP 6.
@@ -210,6 +264,25 @@ LinkedList* MemIndex_Search(MemIndex* index, char* query[], int query_len) {
     Verify333(ll_it != NULL);
     num_docs = LinkedList_NumElements(ret_list);
     for (j = 0; j < num_docs; j++) {
+      SearchResult* result;
+      HTKeyValue_t doc_kv;
+      // Get the current search result
+      LLIterator_Get(ll_it, (LLPayload_t*)&result);
+
+      // Check if this document contains the current query word
+      if (HashTable_Find(wp->postings, result->doc_id, &doc_kv)) {
+        // Document contains this word - update rank
+        LinkedList* positions = (LinkedList*) doc_kv.value;
+        result->rank += LinkedList_NumElements(positions);
+
+        // Move to next result
+        LLIterator_Next(ll_it);
+      } else {
+        // Document doesn't contain this word - remove it
+        SearchResult* removed;
+        LLIterator_Remove(ll_it, free);
+        // free(removed);
+      }
     }
     LLIterator_Free(ll_it);
 

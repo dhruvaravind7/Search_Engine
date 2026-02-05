@@ -50,14 +50,14 @@ typedef struct doctable_st DocTable;
 // Returns:
 // - the newly-allocated table (never NULL).
 DocTable* DocTable_Allocate(void);
-
+ 
 // Frees a DocTable that was previously allocated by DocTable_Allocate,
 // including all strings stored inside of it.
 //
 // Arguments:
 // - table: a previously-allocated DocTable.
 void DocTable_Free(DocTable* table);
-
+ 
 // Returns the number of mappings inside the DocTable.
 //
 // Arguments:
