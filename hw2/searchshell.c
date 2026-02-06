@@ -25,8 +25,12 @@
 
 //////////////////////////////////////////////////////////////////////////////
 // Helper function declarations, constants, etc
+
+//  Prints usage information and exits with failure
 static void Usage(void);
+//  Processes queries from stdin until EOF is reached, printing results
 static void ProcessQueries(DocTable* dt, MemIndex* mi);
+//  Reads the next line from the given file, returning it in *ret_str
 static int GetNextLine(FILE* f, char** ret_str);
 
 
