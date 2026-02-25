@@ -32,7 +32,7 @@ LinkedList* LinkedList_Allocate(void) {
   // Return our newly minted linked list.
   return ll;
 }
-
+ 
 void LinkedList_Free(LinkedList *list,
                      LLPayloadFreeFnPtr payload_free_function) {
   Verify333(list != NULL);

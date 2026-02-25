@@ -192,7 +192,7 @@ struct WordPostingsHeader {
 
   void ToHostFormat() {
     word_bytes = ntohs(word_bytes);
-    postings_bytes = ntohl(postings_bytes);
+    postings_bytes = ntohl(postings_bytes); 
   }
 };
 

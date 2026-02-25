@@ -28,7 +28,7 @@
 // to LinkedList as a new type while leaving the implementation details
 // opaque to the customer.
 typedef struct ll LinkedList;
-
+ 
 // LLPayload type definition:
 // For generality, a payload must be large enough to hold a pointer.
 // If the client's data is no bigger than a pointer, a copy of that

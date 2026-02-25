@@ -9,14 +9,23 @@
  * authors.
  */
 
-#include <cstdlib>    // for EXIT_SUCCESS, EXIT_FAILURE
-#include <iostream>   // for std::cout, std::cerr, etc.
+#include <cstdlib>     // EXIT_SUCCESS, EXIT_FAILURE
+#include <iostream>    // cout, cerr
+#include <sstream>     // stringstream
+#include <string>
+#include <list>
+#include <vector>
 
 #include "./QueryProcessor.h"
 
 using std::cerr;
+using std::cout;
 using std::endl;
-
+using std::getline;
+using std::list;
+using std::string;
+using std::stringstream;
+using std::vector;
 // Error usage message for the client to see
 // Arguments:
 // - prog_name: Name of the program
@@ -78,6 +87,26 @@ static void Usage(char* prog_name);
 // a stringstream gets the job done too.)
 //
 // Good luck, and write beautiful code!
+
+// Lowercase a string in-place (ASCII).
+static void ToLowercase(string* s) {
+  for (size_t i = 0; i < s->size(); i++) {
+    char &c = (*s)[i];
+    if (c >= 'A' && c <= 'Z') c = static_cast<char>(c - 'A' + 'a');
+  }
+}
+
+// Split a line into lowercase words (whitespace separated).
+static vector<string> ParseQueryLine(const string& line) {
+  vector<string> words;
+  stringstream ss(line);
+  string w;
+  while (ss >> w) {
+    ToLowercase(&w);
+    words.push_back(w);
+  }
+  return words;
+}
 int main(int argc, char** argv) {
   if (argc < 2) {
     Usage(argv[0]);
@@ -86,8 +115,32 @@ int main(int argc, char** argv) {
   // STEP 1:
   // Implement filesearchshell!
   // Probably want to write some helper methods ...
-  while (1) { }
+  list<string> idx_list;
+  for (int i = 1; i < argc; i++) {
+    idx_list.push_back(string(argv[i]));
+  }
+  hw3::QueryProcessor qp(idx_list);
 
+  while (true) {
+    cout << "Enter query:" << endl;
+    string line;
+    if (!getline(std::cin, line)) {
+      break;
+    }
+    vector<string> query = ParseQueryLine(line);
+    if (query.empty()) {
+      cout << "  [no results]" << endl;
+      continue;
+    }
+    vector<hw3::QueryProcessor::QueryResult> res = qp.ProcessQuery(query);
+    if (res.empty()) {
+      cout << "  [no results]" << endl;
+      continue;
+    }
+    for (const auto& r : res) {
+      cout << "  " << r.document_name << " (" << r.rank << ")" << endl;
+    }
+  }
   return EXIT_SUCCESS;
 }
 

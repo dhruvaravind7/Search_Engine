@@ -72,18 +72,81 @@ typedef struct {
   int rank;        // The rank of the result so far.
 } IdxQueryResult;
 
-vector<QueryProcessor::QueryResult>
-QueryProcessor::ProcessQuery(const vector<string> &query) const {
+std::vector<QueryProcessor::QueryResult>
+QueryProcessor::ProcessQuery(const std::vector<std::string> &query) const {
   Verify333(query.size() > 0);
 
   // STEP 1.
   // (the only step in this file)
-  vector<QueryProcessor::QueryResult> final_result;
 
+  std::vector<QueryResult> final_result;
+  for (int i = 0; i < array_len_; i++) {
+    std::vector<DocID_t> docids;
+    std::vector<int> ranks;
+    bool first_word = true;
+    bool dead = false;
 
-  // Sort the final results.
+    for (const std::string &term : query) {
+      DocIDTableReader *ditr = itr_array_[i]->LookupWord(term);
+      if (ditr == nullptr) {
+        dead = true;
+        break;
+      }
+
+      std::list<DocIDElementHeader> docs_for_term = ditr->GetDocIDList();
+      delete ditr;
+      if (first_word) {
+        for (const auto &hdr : docs_for_term) {
+          docids.push_back(hdr.doc_id);
+          ranks.push_back(hdr.num_positions);
+        }
+        first_word = false;
+        if (docids.empty()) {
+          dead = true;
+          break;
+        }
+      } else {
+        std::vector<DocID_t> new_docids;
+        std::vector<int> new_ranks;
+        for (size_t k = 0; k < docids.size(); k++) {
+          DocID_t id = docids[k];
+          int curr_rank = ranks[k];
+          bool found = false;
+          int occ = 0;
+          for (const auto &hdr : docs_for_term) {
+            if (hdr.doc_id == id) {
+              found = true;
+              occ = hdr.num_positions;
+              break;
+            }
+          }
+          if (found) {
+            new_docids.push_back(id);
+            new_ranks.push_back(curr_rank + occ);
+          }
+        }
+        docids.swap(new_docids);
+        ranks.swap(new_ranks);
+        if (docids.empty()) {
+          dead = true;
+          break;
+        }
+      }
+    }
+    if (dead || first_word) {
+      continue;
+    }
+    for (size_t k = 0; k < docids.size(); k++) {
+      std::string name;
+      Verify333(dtr_array_[i]->LookupDocID(docids[k], &name));
+      QueryResult qr;
+      qr.document_name = name;
+      qr.rank = ranks[k];
+      final_result.push_back(qr);
+    }
+  }
+
   sort(final_result.begin(), final_result.end());
   return final_result;
 }
-
 }  // namespace hw3

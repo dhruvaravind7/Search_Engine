@@ -40,15 +40,16 @@ FileIndexReader::FileIndexReader(const string &file_name,
   // "man setbuf" for more info.  Note that there may still be buffers
   // implemented by the POSIX libraries, the operating system, or even
   // in the hardware itself.
-
+  setbuf(file_, NULL);
 
   // STEP 2.
   // Read the entire file header and convert to host format.
-
+  Verify333(fread(&header_, sizeof(IndexFileHeader), 1, file_) == 1);
+  header_.ToHostFormat();
 
   // STEP 3.
   // Verify that the magic number is correct.  Crash if not.
-
+  Verify333(header_.magic_number == kMagicNumber);
 
   // Make sure the index file's length lines up with the header fields.
   struct stat f_stat;
@@ -71,10 +72,18 @@ FileIndexReader::FileIndexReader(const string &file_name,
       // You should only need to modify code inside the while loop for
       // this step. Remember that file_ is now unbuffered, so care needs
       // to be put into how the file is sequentially read
+      fseek(file_, sizeof(IndexFileHeader) + header_.doctable_bytes +
+      header_.index_bytes - left_to_read, SEEK_SET);
+      int bytes_read = fread(buf, sizeof(uint8_t), std::min(kBufSize,
+        left_to_read), file_);
+      Verify333(bytes_read > 0);
+      for (int i = 0; i < bytes_read; i++) {
+        crc_obj.FoldByteIntoCRC(buf[i]);
+      }
+      left_to_read -= bytes_read;
     }
     Verify333(crc_obj.GetFinalCRC() == header_.checksum);
   }
-
   // Everything looks good; we're done!
 }
 
