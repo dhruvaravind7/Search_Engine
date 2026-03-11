@@ -58,9 +58,26 @@ bool IsPathSafe(const string &root_dir, const string &test_file) {
   // path of a file.)
 
   // STEP 1
+  char real_root[PATH_MAX];
+  char real_test[PATH_MAX];
 
+  // make sure realpath succeeds for both root_dir and test_file
+  if (realpath(root_dir.c_str(), real_root) == nullptr) {
+    return false;
+  }
+  if (realpath(test_file.c_str(), real_test) == nullptr) {
+    return false;
+  }
 
-  return true;  // you may want to change this return value
+  string root_str(real_root);
+  string test_str(real_test);
+
+  // ensure test_file path starts with root_dir path
+  // Append "/" to root to prevent confusing prefixes
+  if (root_str.back() != '/') {
+    root_str += '/';
+  }
+  return test_str.find(root_str) == 0;
 }
 
 string EscapeHtml(const string &from) {
@@ -74,6 +91,11 @@ string EscapeHtml(const string &from) {
   // looked up online.
 
   // STEP 2
+  replace_all(ret, "&", "&amp;");   // first to avoid double-escaping
+  replace_all(ret, "<", "&lt;");
+  replace_all(ret, ">", "&gt;");
+  replace_all(ret, "\"", "&quot;");
+  replace_all(ret, "'", "&apos;");
 
 
   return ret;

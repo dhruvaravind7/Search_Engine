@@ -89,7 +89,7 @@ class ServerSocket {
               std::string* const client_dns_name,
               std::string* const server_addr,
               std::string* const server_dns_name) const;
-
+ 
  private:
   uint16_t port_;
   int listen_sock_fd_;

@@ -41,24 +41,24 @@ namespace hw4 {
 const int HttpServer::kNumThreads = 8;
 
 static const char* kThreegleStr =
-  "<html><head><title>333gle</title></head>\n"
-  "<body>\n"
-  "<center style=\"font-size:500%;\">\n"
-  "<span style=\"position:relative;bottom:-0.33em;color:orange;\">3</span>"
-    "<span style=\"color:red;\">3</span>"
-    "<span style=\"color:gold;\">3</span>"
-    "<span style=\"color:blue;\">g</span>"
-    "<span style=\"color:green;\">l</span>"
-    "<span style=\"color:red;\">e</span>\n"
-  "</center>\n"
-  "<p>\n"
-  "<div style=\"height:20px;\"></div>\n"
-  "<center>\n"
-  "<form action=\"/query\" method=\"get\">\n"
-  "<input type=\"text\" size=30 name=\"terms\" />\n"
-  "<input type=\"submit\" value=\"Search\" />\n"
-  "</form>\n"
-  "</center><p>\n";
+"<html><head><title>333gle</title></head>\n"
+"<body>\n"
+"<center style=\"font-size:500%;\">\n"
+"<span style=\"position:relative;bottom:-0.33em;color:orange;\">3</span>"
+"<span style=\"color:red;\">3</span>"
+"<span style=\"color:gold;\">3</span>"
+"<span style=\"color:blue;\">g</span>"
+"<span style=\"color:green;\">l</span>"
+"<span style=\"color:red;\">e</span>\n"
+"</center>\n"
+"<p>\n"
+"<div style=\"height:20px;\"></div>\n"
+"<center>\n"
+"<form action=\"/query\" method=\"get\">\n"
+"<input type=\"text\" size=30 name=\"terms\" />\n"
+"<input type=\"submit\" value=\"Search\" />\n"
+"</form>\n"
+"</center><p>\n";
 
 // This is the function that threads are dispatched into
 // in order to process new client connections.
@@ -168,12 +168,22 @@ static void HttpServer_ThrFn(ThreadPool::Task* t) {
   // this function.
 
   // STEP 1:
+  HttpConnection hc(hst->client_fd);
   HttpRequest rq;  // you should probably initialize this somehow
   while (!hst->server_->IsShuttingDown()) {
-
+    if (!hc.GetNextRequest(&rq)) {
+      break;
+    }
     // If the client requested the server to shut down, do so.
     if (StringStartsWith(rq.uri(), "/quitquitquit")) {
       hst->server_->BeginShutdown();
+      break;
+    }
+    HttpResponse resp = ProcessRequest(rq, hst->base_dir, *(hst->indices));
+    if (!hc.WriteResponse(resp)) {
+      break;
+    }
+    if (rq.GetHeaderValue("connection") == "close") {
       break;
     }
   }
@@ -221,8 +231,45 @@ static HttpResponse ProcessFileRequest(const string &uri,
   string file_name = "";
 
   // STEP 2:
+  URLParser parser;
+  parser.Parse(uri);
 
+  string path = parser.path();
+  file_name = path.substr(string("/static/").size());
+  if (!IsPathSafe(base_dir, base_dir + "/" + file_name)) {
+    ret.set_protocol("HTTP/1.1");
+    ret.set_response_code(403);
+    ret.set_message("Forbidden");
+    ret.AppendToBody("<html><body>Forbidden</body></html>\n");
+    return ret;
+  }
+  FileReader fr(base_dir, file_name);
 
+  string contents;
+  if (fr.ReadFile(&contents)) {
+    ret.AppendToBody(contents);
+    ret.set_protocol("HTTP/1.1");
+    ret.set_response_code(200);
+    ret.set_message("OK");
+
+    string ext = "";
+    size_t dot_pos = file_name.find_last_of(".");
+    if (dot_pos != string::npos) {
+      ext = file_name.substr(dot_pos);
+    }
+    if (ext == ".html" || ext == ".htm") ret.set_content_type("text/html");
+    else if (ext == ".jpeg" || ext == ".jpg")
+    ret.set_content_type("image/jpeg");
+    else if (ext == ".png") ret.set_content_type("image/png");
+    else if (ext == ".txt") ret.set_content_type("text/plain");
+    else if (ext == ".js") ret.set_content_type("application/javascript");
+    else if (ext == ".css") ret.set_content_type("text/css");
+    else if (ext == ".xml") ret.set_content_type("application/xml");
+    else if (ext == ".gif") ret.set_content_type("image/gif");
+    else ret.set_content_type("text/plain");
+
+    return ret;
+  }
   // If you couldn't find the file, return an HTTP 404 error.
   ret.set_protocol("HTTP/1.1");
   ret.set_response_code(404);
@@ -236,31 +283,78 @@ static HttpResponse ProcessFileRequest(const string &uri,
 static HttpResponse ProcessQueryRequest(const string &uri,
                                         const list<string> &indices,
                                         const string &base_dir) {
-  // The response we're building up.
   HttpResponse ret;
-
-  // Your job here is to figure out how to present the user with
-  // the same query interface as our solution_binaries/http333d server.
-  // A couple of notes:
-  //
-  // 1. The 333gle logo and search box/button should be present on the site.
-  //
-  // 2. If the user had previously typed in a search query, you also need
-  //    to display the search results.
-  //
-  // 3. you'll want to use the URLParser to parse the uri and extract
-  //    search terms from a typed-in search query.  convert them
-  //    to lower case.
-  //
-  // 4. Initialize and use hw3::QueryProcessor to process queries with the
-  //    search indices.
-  //
-  // 5. With your results, try figuring out how to hyperlink results to file
-  //    contents, like in solution_binaries/http333d. (Hint: Look into HTML
-  //    tags!)
+  ret.set_protocol("HTTP/1.1");
+  ret.set_response_code(200);
+  ret.set_message("OK");
+  ret.set_content_type("text/html");
 
   // STEP 3:
+  // Parse the URI to extract query args
+  URLParser parser;
+  parser.Parse(uri);
+  auto args = parser.args();
 
+  // Build the 333gle search page header
+  ret.AppendToBody(kThreegleStr);
+
+  // If there are search terms, process the query
+  if (args.find("terms") != args.end()) {
+    string terms = args["terms"];
+
+    // Convert terms to lowercase
+    transform(terms.begin(), terms.end(), terms.begin(), ::tolower);
+
+    // Split the terms into a vector of words
+    std::vector<string> query_words;
+    std::istringstream iss(terms);
+    string word;
+    while (iss >> word) {
+      query_words.push_back(word);
+    }
+
+    // Use QueryProcessor to process the query
+    hw3::QueryProcessor qp(indices);
+    std::vector<hw3::QueryProcessor::QueryResult> results =
+    qp.ProcessQuery(query_words);
+
+    // Display results
+    ret.AppendToBody("<p><b>Results for \"" + EscapeHtml(terms) +
+    "\":</b></p>\n");
+    if (results.empty()) {
+      ret.AppendToBody("<p>No results found.</p>\n");
+    } else {
+      ret.AppendToBody("<ul>\n");
+      // Normalize base_dir to ensure it has a trailing slash
+      char real_base[PATH_MAX];
+      char real_doc[PATH_MAX];
+      realpath(base_dir.c_str(), real_base);
+      string base_str(real_base);
+      if (base_str.back() != '/') base_str += '/';
+
+      for (const auto &result : results) {
+        string doc_name = result.document_name;
+        if (doc_name.substr(0, 4) == "http") {
+          ret.AppendToBody("<li><a href=\"" + doc_name + "\">"
+                          + EscapeHtml(doc_name) + "</a> ["
+                          + std::to_string(result.rank) + "]</li>\n");
+          continue;
+        } else if (realpath(doc_name.c_str(), real_doc) != nullptr) {
+          string real_doc_str(real_doc);
+          if (real_doc_str.find(base_str) == 0) {
+            doc_name = real_doc_str.substr(base_str.length());
+          }
+        }
+
+        ret.AppendToBody("<li><a href=\"/static/" + doc_name + "\">"
+                        + EscapeHtml(doc_name) + "</a> ["
+                        + std::to_string(result.rank) + "]</li>\n");
+      }
+      ret.AppendToBody("</ul>\n");
+    }
+  }
+
+  ret.AppendToBody("</body></html>\n");
   return ret;
 }
 

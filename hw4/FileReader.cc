@@ -45,7 +45,16 @@ bool FileReader::ReadFile(string* const contents) {
   // HttpUtils.h above the MallocDeleter class for details.
 
   // STEP 1:
+  int file_size;
+  // read file into memory
+  char* file_contents = ::ReadFileToString(full_file.c_str(), &file_size);
+  if (file_contents == nullptr) {  // file not found or could not be opened
+    return false;
+  }
 
+  // copy file contents to output parameter
+  *contents = string(file_contents, file_size);
+  free(file_contents);
 
   return true;
 }

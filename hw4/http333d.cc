@@ -101,5 +101,40 @@ static void GetPortAndPath(int argc,
   // - You have at least 1 index, and all indices are readable files
 
   // STEP 1:
+  // Check number of arguments
+  if (argc < 4) {
+    Usage(argv[0]);
+  }
+
+  // Check port
+  char* end;
+  int16_t temp_port_long = strtol(argv[1], &end, 10);
+  if (*end != '\0' || temp_port_long < 1024 || temp_port_long > 65535) {
+      Usage(argv[0]);
+  }
+  *port = static_cast<uint16_t>(temp_port_long);
+
+  // Check directory
+  DIR* dir = opendir(argv[2]);
+  if (dir == nullptr) {
+    Usage(argv[0]);
+  }
+  closedir(dir);
+  *path = argv[2];
+
+  // Check indices
+  list<string> temp_indices;
+  for (int i = 3; i < argc; i++) {
+    int fd = open(argv[i], O_RDONLY);
+    if (fd == -1) {
+      Usage(argv[0]);
+    }
+    close(fd);
+    temp_indices.push_back(string(argv[i]));
+  }
+  if (temp_indices.empty()) {
+    Usage(argv[0]);
+  }
+  *indices = temp_indices;
 }
 

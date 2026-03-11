@@ -47,9 +47,33 @@ bool HttpConnection::GetNextRequest(HttpRequest* const request) {
   // next time the caller invokes GetNextRequest()!
 
   // STEP 1:
+  static const int kBufSize = 1024;
+  unsigned char buf[kBufSize];
 
+  // read until "\r\n\r\n" or the connection drops
+  while (buffer_.find(kHeaderEnd) == string::npos) {
+    int bytes_read = WrappedRead(fd_, buf, kBufSize);
+    if (bytes_read == 0) {
+      // connection closed early
+      return false;
+    }
+    if (bytes_read < 0) {
+      // fatal read
+      return false;
+    }
+    buffer_ += string(reinterpret_cast<char*>(buf), bytes_read);
+  }
 
-  return false;  // you may need to change this return value
+  // locate end of first request header
+  size_t header_end = buffer_.find(kHeaderEnd);
+  string raw_request = buffer_.substr(0, header_end + kHeaderEndLen);
+
+  // save anything after the header for later
+  buffer_ = buffer_.substr(header_end + kHeaderEndLen);
+
+  *request = ParseRequest(raw_request);
+
+  return true;  // you may need to change this return value
 }
 
 bool HttpConnection::WriteResponse(const HttpResponse &response) const {
@@ -86,6 +110,40 @@ HttpRequest HttpConnection::ParseRequest(const string &request) const {
   // Note: If a header is malformed, skip that line.
 
   // STEP 2:
+  vector<string> lines;
+  boost::split(lines, request, boost::is_any_of("\r\n"),
+              boost::token_compress_on);
+
+  if (lines.empty()) {
+    return req;
+  }
+
+  // extract URI from the first line
+  vector<string> first_line;
+  boost::split(first_line, lines[0], boost::is_any_of(" "));
+  if (first_line.size() >= 2) {
+    req.set_uri(first_line[1]);
+  }
+
+  // parse remaining lines as headers
+  for (size_t i = 1; i < lines.size(); i++) {
+    boost::trim_right(lines[i]);
+    if (lines[i].empty()) continue;
+
+    size_t colon_pos = lines[i].find(':');
+    if (colon_pos == string::npos) continue;  // malformed, skip
+
+    string name = lines[i].substr(0, colon_pos);
+    string value = lines[i].substr(colon_pos + 1);
+
+    boost::trim(name);
+    boost::trim(value);
+    boost::to_lower(name);
+
+    if (name.empty() || value.empty()) continue;  // malformed, skip
+
+    req.AddHeader(name, value);
+  }
 
 
   return req;
